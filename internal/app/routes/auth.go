@@ -14,9 +14,10 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	UserID  string `json:"user_id,omitempty"`
+	Success  bool   `json:"success"`
+	Message  string `json:"message"`
+	UserID   string `json:"user_id,omitempty"`
+	UserName string `json:"user_name,omitempty"`
 }
 
 func RegisterAuthRoutes(s *easytcp.Server) {
@@ -46,9 +47,10 @@ func handleLogin(ctx easytcp.Context) {
 	services.StoreSession(ctx.Session(), user.ID, user.Email)
 
 	resp := LoginResponse{
-		Success: true,
-		Message: "authenticated",
-		UserID:  user.ID,
+		Success:  true,
+		Message:  "authenticated",
+		UserID:   user.ID,
+		UserName: user.GetUserName(),
 	}
 
 	respData, _ := json.Marshal(resp)

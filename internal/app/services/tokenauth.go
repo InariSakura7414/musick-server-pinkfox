@@ -6,18 +6,43 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 )
 
-var supabaseURL = os.Getenv("SUPABASE_URL")
-var supabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")
+var (
+	supabaseURL     string
+	supabaseAnonKey string
+	envOnce         sync.Once
+)
+
+func loadEnv() {
+	envOnce.Do(func() {
+		supabaseURL = os.Getenv("SUPABASE_URL")
+		supabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")
+	})
+}
 
 type SupabaseUser struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID           string                 `json:"id"`
+	Email        string                 `json:"email"`
+	UserMetadata map[string]interface{} `json:"user_metadata"`
+}
+
+// GetUserName extracts username from user_metadata, falls back to empty string.
+func (u *SupabaseUser) GetUserName() string {
+	if u.UserMetadata == nil {
+		return ""
+	}
+	if name, ok := u.UserMetadata["user_name"].(string); ok {
+		return name
+	}
+	return ""
 }
 
 // VerifyToken validates JWT with Supabase and returns user info.
 func VerifyToken(token string) (*SupabaseUser, error) {
+	loadEnv()
+
 	req, _ := http.NewRequest("GET", supabaseURL+"/auth/v1/user", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("apikey", supabaseAnonKey)

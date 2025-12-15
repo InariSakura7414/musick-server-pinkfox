@@ -48,4 +48,7 @@ func registerRoutes(s *easytcp.Server) {
 
 	// Route 10: authenticate user via Supabase JWT.
 	routes.RegisterAuthRoutes(s)
+
+	// Route 201: create room.
+	routes.RegisterRoomRoutes(s)
 }
