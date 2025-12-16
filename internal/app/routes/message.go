@@ -18,13 +18,14 @@ type SendMessageRequest struct {
 }
 
 type SendMessageResponse struct {
-	Success  bool   `json:"success"`
-	Message  string `json:"message"`
-	ID       int64  `json:"id,omitempty"`
-	RoomID   string `json:"room_id,omitempty"`
-	SenderID string `json:"sender_id,omitempty"`
-	Body     string `json:"body,omitempty"`
-	SentAt   string `json:"sent_at,omitempty"`
+	Success    bool   `json:"success"`
+	Message    string `json:"message"`
+	ID         int64  `json:"id,omitempty"`
+	RoomID     string `json:"room_id,omitempty"`
+	SenderID   string `json:"sender_id,omitempty"`
+	SenderName string `json:"sender_name,omitempty"`
+	Body       string `json:"body,omitempty"`
+	SentAt     string `json:"sent_at,omitempty"`
 }
 
 type FetchMessagesRequest struct {
@@ -84,7 +85,8 @@ func handleSendMessage(ctx easytcp.Context) {
 		return
 	}
 
-	saved, err := services.CreateMessage(msgReq.RoomID, msgReq.UserID, msgReq.Body)
+	saved, err := services.CreateMessage(msgReq.RoomID, msgReq.UserID, session.UserName, msgReq.Body)
+
 	if err != nil {
 		log.Printf("failed to send message: %v", err)
 		sendMessageError(ctx, "failed to send message")
@@ -98,26 +100,28 @@ func handleSendMessage(ctx easytcp.Context) {
 
 	// Broadcast to all sessions in the room (including sender) on route 302.
 	broadcast := SendMessageResponse{
-		Success:  true,
-		Message:  "message delivered",
-		ID:       saved.ID,
-		RoomID:   saved.RoomID,
-		SenderID: saved.SenderID,
-		Body:     saved.Body,
-		SentAt:   saved.SentAt.Format(time.RFC3339),
+		Success:    true,
+		Message:    "message delivered",
+		ID:         saved.ID,
+		RoomID:     saved.RoomID,
+		SenderID:   saved.SenderID,
+		SenderName: saved.SenderName,
+		Body:       saved.Body,
+		SentAt:     saved.SentAt.Format(time.RFC3339),
 	}
 	if b, err := json.Marshal(broadcast); err == nil {
 		services.BroadcastToRoom(msgReq.RoomID, easytcp.NewMessage(302, b), nil)
 	}
 
 	resp := SendMessageResponse{
-		Success:  true,
-		Message:  "message sent",
-		ID:       saved.ID,
-		RoomID:   saved.RoomID,
-		SenderID: saved.SenderID,
-		Body:     saved.Body,
-		SentAt:   saved.SentAt.Format(time.RFC3339),
+		Success:    true,
+		Message:    "message sent",
+		ID:         saved.ID,
+		RoomID:     saved.RoomID,
+		SenderID:   saved.SenderID,
+		SenderName: saved.SenderName,
+		Body:       saved.Body,
+		SentAt:     saved.SentAt.Format(time.RFC3339),
 	}
 
 	data, _ := json.Marshal(resp)
@@ -164,11 +168,12 @@ func handleFetchMessages(ctx easytcp.Context) {
 	fetched := make([]FetchedMessage, 0, len(msgs))
 	for _, m := range msgs {
 		fetched = append(fetched, FetchedMessage{
-			ID:        m.ID,
-			RoomID:    m.RoomID,
-			SenderID:  m.SenderID,
-			Body:      m.Body,
-			CreatedAt: m.SentAt.Format(time.RFC3339),
+			ID:         m.ID,
+			RoomID:     m.RoomID,
+			SenderID:   m.SenderID,
+			SenderName: m.SenderName,
+			Body:       m.Body,
+			CreatedAt:  m.SentAt.Format(time.RFC3339),
 		})
 	}
 

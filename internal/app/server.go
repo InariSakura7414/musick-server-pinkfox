@@ -54,6 +54,9 @@ func registerRoutes(s *easytcp.Server) {
 	// Route 210: list rooms.
 	routes.RegisterRoomRoutes(s)
 
+	// Route 202: join room by code.
+	routes.RegisterJoinRoomRoutes(s)
+
 	// Route 301: post message to Supabase.
 	routes.RegisterMessageRoutes(s)
 }

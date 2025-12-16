@@ -11,16 +11,17 @@ import (
 )
 
 type Message struct {
-	ID       int64     `json:"id"`
-	RoomID   string    `json:"room_id"`
-	SenderID string    `json:"sender_id"`
-	Body     string    `json:"body"`
-	Type     string    `json:"type"`
-	SentAt   time.Time `json:"sent_at"`
+	ID         int64     `json:"id"`
+	RoomID     string    `json:"room_id"`
+	SenderID   string    `json:"sender_id"`
+	SenderName string    `json:"sender_name,omitempty"`
+	Body       string    `json:"body"`
+	Type       string    `json:"type"`
+	SentAt     time.Time `json:"sent_at"`
 }
 
 // CreateMessage inserts a new message into Supabase messages table.
-func CreateMessage(roomID, senderID, body string) (*Message, error) {
+func CreateMessage(roomID, senderID, senderName, body string) (*Message, error) {
 	loadEnv()
 
 	payload := map[string]interface{}{
@@ -59,7 +60,9 @@ func CreateMessage(roomID, senderID, body string) (*Message, error) {
 		return nil, fmt.Errorf("message insert returned no rows")
 	}
 
-	return &rows[0], nil
+	msg := rows[0]
+	msg.SenderName = senderName
+	return &msg, nil
 }
 
 // ListMessages returns messages for a room ordered newest-first, with optional before-id pagination.
@@ -101,16 +104,84 @@ func ListMessages(roomID, beforeID string, limit int, includeSystem bool) ([]Mes
 		return nil, false, fmt.Errorf("fetch messages failed (status %d): %s", resp.StatusCode, bodyBytes)
 	}
 
-	var rows []Message
+	var rows []struct {
+		ID       int64     `json:"id"`
+		RoomID   string    `json:"room_id"`
+		SenderID string    `json:"sender_id"`
+		Body     string    `json:"body"`
+		Type     string    `json:"type"`
+		SentAt   time.Time `json:"sent_at"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
 		return nil, false, fmt.Errorf("decode messages: %w", err)
 	}
 
-	hasMore := false
-	if len(rows) > limit {
-		hasMore = true
-		rows = rows[:limit]
+	msgs := make([]Message, 0, len(rows))
+	nameCache := make(map[string]string)
+	for _, r := range rows {
+		m := Message{
+			ID:       r.ID,
+			RoomID:   r.RoomID,
+			SenderID: r.SenderID,
+			Body:     r.Body,
+			Type:     r.Type,
+			SentAt:   r.SentAt,
+		}
+
+		if cached, ok := nameCache[r.SenderID]; ok {
+			m.SenderName = cached
+		} else {
+			if name, err := fetchSenderName(r.SenderID); err == nil {
+				m.SenderName = name
+				nameCache[r.SenderID] = name
+			}
+		}
+		msgs = append(msgs, m)
 	}
 
-	return rows, hasMore, nil
+	hasMore := false
+	if len(msgs) > limit {
+		hasMore = true
+		msgs = msgs[:limit]
+	}
+
+	return msgs, hasMore, nil
+}
+
+// fetchSenderName gets user_name from auth admin endpoint using service key.
+func fetchSenderName(userID string) (string, error) {
+	if supabaseAPIKey == "" || supabaseURL == "" {
+		return "", fmt.Errorf("supabase config missing")
+	}
+	endpoint := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID)
+	req, _ := http.NewRequest("GET", endpoint, nil)
+	req.Header.Set("Authorization", "Bearer "+supabaseAPIKey)
+	req.Header.Set("apikey", supabaseAPIKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("fetch user failed status %d: %s", resp.StatusCode, bodyBytes)
+	}
+
+	var user struct {
+		UserMetadata map[string]interface{} `json:"user_metadata"`
+		RawMeta      map[string]interface{} `json:"raw_user_meta_data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return "", err
+	}
+
+	if name, ok := user.UserMetadata["user_name"].(string); ok {
+		return name, nil
+	}
+	if name, ok := user.RawMeta["user_name"].(string); ok {
+		return name, nil
+	}
+	return "", nil
 }

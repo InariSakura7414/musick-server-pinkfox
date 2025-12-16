@@ -10,6 +10,7 @@ import (
 type UserSession struct {
 	UserID        string
 	Email         string
+	UserName      string
 	Authenticated bool
 }
 
@@ -19,12 +20,13 @@ var (
 )
 
 // StoreSession saves user info for the connection's lifetime.
-func StoreSession(sess easytcp.Session, userID, email string) {
+func StoreSession(sess easytcp.Session, userID, email, userName string) {
 	sessionsMu.Lock()
 	defer sessionsMu.Unlock()
 	sessions[sess.ID()] = &UserSession{
 		UserID:        userID,
 		Email:         email,
+		UserName:      userName,
 		Authenticated: true,
 	}
 }

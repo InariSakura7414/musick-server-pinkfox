@@ -44,7 +44,7 @@ func handleLogin(ctx easytcp.Context) {
 	log.Printf("user authenticated: %s (%s)", user.Email, user.ID)
 
 	// Store session data for the connection's lifetime
-	services.StoreSession(ctx.Session(), user.ID, user.Email)
+	services.StoreSession(ctx.Session(), user.ID, user.Email, user.GetUserName())
 
 	resp := LoginResponse{
 		Success:  true,
